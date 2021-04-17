@@ -1,4 +1,4 @@
-import jpeg2
+#import jpeg2
 from skimage import data, io
 
 img = io.imread("a.bmp")
