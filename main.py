@@ -1,3 +1,4 @@
+# edited by zjt
 from skimage import data, io
 import sys
 sys.path.append("D:\计算机\WORKS\信息隐藏技术\datahide_lab")
@@ -21,6 +22,5 @@ for num in data0:
     data += l
 stegano = jpeg_stegano(process.zig_data, data, process)
 stegano.process_before()
-#codec, encoded = stegano.stegano_compress()
 stegano.process_after(secret_shape)
 stegano.display_result('before.bmp', 'after.bmp', 'HELLOWORLD.jpg', 'extract_img.jpg')

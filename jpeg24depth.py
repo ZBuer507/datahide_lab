@@ -1,3 +1,4 @@
+# edited by mqa and zh
 import numpy as np
 
 class jpeg_24bit_depth:
@@ -43,6 +44,7 @@ class jpeg_24bit_depth:
     dct_image_after_quantization = None
     zig_data = None
 
+    # edited by mqa
     def __init__(self, img):
         self.const()
         self.origin_image = img
@@ -59,6 +61,7 @@ class jpeg_24bit_depth:
         self.quantization()
         self.zigzag()
 
+    # edited by mqa
     def const(self):
         self.block_size = 8
 
@@ -84,6 +87,7 @@ class jpeg_24bit_depth:
                     self.zig.append((i, sum - i))
             sum += 1
 
+    # edited by mqa
     def padding(self):
         self.origin_height = self.origin_image.shape[0]
         self.origin_width = self.origin_image.shape[1]
@@ -103,6 +107,7 @@ class jpeg_24bit_depth:
         self.height = self.origin_image.shape[0]
         self.width = self.origin_image.shape[1]
     
+    # edited by mqa
     def color_space_trans(self):
         if self.level == 1:
             self.image = np.zeros((self.height, self.width, self.level), dtype=int)
@@ -119,18 +124,21 @@ class jpeg_24bit_depth:
         self.image[:,:,1] = -0.1687 * r - 0.3313 * g + 0.5 * b
         self.image[:,:,2] = 0.5 * r - 0.4187 * g + 0.0813 * b
     
+    # edited by mqa
     def block(self, num):
         lev = num // self.block_per_level
         top = ((num % self.block_per_level) // self.block_per_line) * self.block_size
         left = ((num % self.block_per_level) % self.block_per_line) * self.block_size
         return lev, top, left
     
+    # edited by mqa
     def dct(self):
         self.dct_image = np.zeros((self.height, self.width, self.level))
         for i in range(self.block_count):
             lev, top, left = self.block(i)
             self.dct_image[top:top+self.block_size, left:left+self.block_size, lev] = self.alpha * (self.A.T @ (self.image[top:top+self.block_size, left:left+self.block_size, lev] - 128) @ self.A) / 4
-        
+    
+    # edited by mqa
     def quantization(self):
         self.dct_image_after_quantization = np.zeros(
             (self.height, self.width, self.level),
@@ -150,6 +158,7 @@ class jpeg_24bit_depth:
                                         left:left+self.block_size,
                                         lev] / Q)
 
+    # edited by mqa
     def zigzag(self):
         self.zig_data = []
         for i in range(self.block_count):
@@ -161,6 +170,7 @@ class jpeg_24bit_depth:
                 tmp.append(self.dct_image_after_quantization[row + top, col + left, lev])
             self.zig_data.append(tmp)
 
+    # edited by zh
     def dezigzag(self, zig_data):
         dzz_data = []
         for item in zig_data:
@@ -171,6 +181,7 @@ class jpeg_24bit_depth:
             dzz_data.append(tmp)
         return dzz_data
 
+    # edited by zh
     def dequantization(self, dzz_data):
         dequantization_data = []
         for item in dzz_data :
@@ -179,6 +190,7 @@ class jpeg_24bit_depth:
             dequantization_data.append(tmp)
         return dequantization_data
 
+    # edited by zh
     def idct(self, dequantization_data):
         idct_data = []
         for item in dequantization_data :
