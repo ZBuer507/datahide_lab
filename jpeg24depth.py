@@ -160,3 +160,29 @@ class jpeg_24bit_depth:
                 row, col = self.zig[j]
                 tmp.append(self.dct_image_after_quantization[row + top, col + left, lev])
             self.zig_data.append(tmp)
+
+    def dezigzag(self, zig_data):
+        dzz_data = []
+        for item in zig_data:
+            tmp = np.zeros((self.block_size, self.block_size))
+            for index in range(0,len(item) - 1):
+                i , j = self.zig[index]
+                tmp[i, j] = item[index]
+            dzz_data.append(tmp)
+        return dzz_data
+
+    def dequantization(self, dzz_data):
+        dequantization_data = []
+        for item in dzz_data :
+            tmp = np.zeros((self.block_size, self.block_size))
+            tmp = np.multiply(item , self.Qy)
+            dequantization_data.append(tmp)
+        return dequantization_data
+
+    def idct(self, dequantization_data):
+        idct_data = []
+        for item in dequantization_data :
+            tmp = np.zeros((self.block_size, self.block_size))
+            tmp = np.linalg.inv((self.A.T)) @ (4 * item / self.alpha) @ np.linalg.inv(self.A) + 128
+            idct_data.append(np.round(tmp))
+        return idct_data

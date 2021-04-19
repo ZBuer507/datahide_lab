@@ -11,15 +11,38 @@ from jpeg24depth import *
 SHOW = True
 
 class jpeg_stegano:
+    process = None
     zig_data = None
     data = None
     zig_data_ste = None
     length = 0
 
-    def __init__(self, zig_data, data):
+    def __init__(self, zig_data, data, process):
         self.zig_data = zig_data
         self.data = data
+        self.process = process
         self.f3_stegano()
+
+    def compress_pic(self):
+        sequence = tuple([tuple(line) for line in self.zig_data_ste])
+        codec = HuffmanCodec.from_data(sequence)
+        encoded = codec.encode(sequence)
+        return codec, encoded
+
+    def compress_pic_before(self):
+        sequence = tuple([tuple(line) for line in self.zig_data])
+        codec = HuffmanCodec.from_data(sequence)
+        encoded = codec.encode(sequence)
+        return codec, encoded
+
+    def stegano_compress(self):
+        codec, encoded = self.compress_pic()
+        return codec, encoded
+
+    def decompress_reverse(self, codec, encoded, secret_shape):
+        decoded_blocks = self.decompress_pic(codec, encoded)
+        self.extrct_info(decoded_blocks, secret_shape)
+        self.reverse_process(decoded_blocks)
 
     def f3_stegano(self):
         self.zig_data_ste = []
@@ -35,7 +58,7 @@ class jpeg_stegano:
                     elif block[pos_zig] % 2 == 1:
                         pos_data += 1
                     else:
-                        block[pos_zig] = int((abs(block[pos_zig]) - 1) * (abs(block[pos_zig]) / block[pos_zig]))
+                        block[pos_zig] = (abs(block[pos_zig]) - 1) * (abs(block[pos_zig]) // block[pos_zig])
                         pos_data += 1
                 else:
                     if block[pos_zig] == 0:
@@ -45,25 +68,14 @@ class jpeg_stegano:
                     elif block[pos_zig] % 2 == 0:
                         pos_data += 1
                     else:
-                        block[pos_zig] = int((abs(block[pos_zig]) - 1) * (abs(block[pos_zig]) / block[pos_zig]))
+                        block[pos_zig] = (abs(block[pos_zig]) - 1) * (abs(block[pos_zig]) // block[pos_zig])
                         pos_data += 1
                 pos_zig += 1
             self.zig_data_ste.append(block)
             if pos_data == len(self.data) and not flag:
                 flag = True
         self.length = pos_data
-        #print(pos_data)
-
-    def compress_pic(self):
-        sequence = tuple([tuple(line) for line in self.zig_data_ste])
-        codec = HuffmanCodec.from_data(sequence)
-        encoded = codec.encode(sequence)
-        return codec, encoded
-
-    def decompress_pic(self, codec, compress_pic):
-        decoded = codec.decode(compress_pic)
-        decoded_blocks = [line for line in decoded]
-        return decoded_blocks
+        print(self.length)
 
     def extrct_info(self, decoded_blocks, secret_shape):
         bin_seq = []
@@ -79,33 +91,61 @@ class jpeg_stegano:
                         Image.fromarray(img_arr).save('extract_img.jpg')
                         return
 
-    def stegano_compress(self):
+    def process_after(self, secret_shape):
         codec, encoded = self.compress_pic()
-        # print('size of compressed pic is %.2fkB' % (len(encoded) / 1024))
-        return codec, encoded
-
-    def decompress_reverse(self, codec, encoded, secret_shape):
-        decoded_blocks = self.decompress_pic(codec, encoded)
-        self.extrct_info(decoded_blocks, secret_shape)
-        self.reverse_process(decoded_blocks)
-
-    def reverse_process(self, stegano_blocks):
-        iquant_blocks = [np.array(line).reshape([8,8]) * np.array([np.array(l) for l in jpeg_24bit_depth.Qy]) for line in stegano_blocks]
-        idct_blocks = []
+        stegano_blocks = codec.decode(encoded)
+        self.extrct_info(stegano_blocks, secret_shape)
+        zig_data = [list(line) for line in stegano_blocks]
+        dzz_data = self.process.dezigzag(zig_data)
+        dequantization_data = self.process.dequantization(dzz_data)
+        idct_data = self.process.idct(dequantization_data)
         stack_arr = []
-        #Image.fromarray(stack_arr).save('reversed_img.jpg')
+        for i in range(self.process.width):
+            stack_arr += [[None]*self.process.height]
+        i = 0
+        for item in idct_data:
+            j = 0
+            x = (i%self.process.block_per_line)*8
+            y = (i//self.process.block_per_line)*8
+            while j <= 63:
+                stack_arr[y + j%8][x + j//8] = item[j%8][j//8]
+                j += 1
+            i += 1
+        Image.fromarray(np.array([np.array(line) for line in stack_arr], dtype=np.uint8)).save('after.bmp')
+
+    def process_before(self):
+        codec, encoded = self.compress_pic_before()
+        decoded = codec.decode(encoded)
+        stegano_blocks = [line for line in decoded]
+        zig_data = [list(line) for line in stegano_blocks]
+        dzz_data = self.process.dezigzag(zig_data)
+        dequantization_data = self.process.dequantization(dzz_data)
+        idct_data = self.process.idct(dequantization_data)
+        stack_arr = []
+        for i in range(self.process.width):
+            stack_arr += [[None]*self.process.height]
+        i = 0
+        for item in idct_data:
+            j = 0
+            x = (i%self.process.block_per_line)*8
+            y = (i//self.process.block_per_line)*8
+            while j <= 63:
+                stack_arr[y + j%8][x + j//8] = item[j%8][j//8]
+                j += 1
+            i += 1
+        Image.fromarray(np.array([np.array(line) for line in stack_arr], dtype=np.uint8)).save('before.bmp')
 
     def display_result(self, original_path, stegano_path, secret_path, extract_path):
         plt.subplot(2,2,1)
         plt.imshow(cv2.cvtColor(cv2.imread(original_path), cv2.COLOR_BGR2RGB))
-        plt.title('original')
+        plt.title('before')
         plt.axis('off')
-        '''
+        
         plt.subplot(2, 2, 2)
         plt.imshow(cv2.cvtColor(cv2.imread(stegano_path), cv2.COLOR_BGR2RGB))
-        plt.title('stegano')
+        plt.title('after')
         plt.axis('off')
-        '''
+        
         plt.subplot(2, 2, 3)
         plt.imshow(cv2.cvtColor(cv2.imread(secret_path), cv2.COLOR_BGR2RGB))
         plt.title('secret')
