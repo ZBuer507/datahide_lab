@@ -53,7 +53,7 @@ class jpeg_stegano:
             pos_zig = 0
             block = copy.deepcopy(item)
             while pos_zig < 64 and pos_data < len(self.data) and not flag:
-                if self.data[pos_data] == 1 or self.data[pos_data] == -1:
+                if self.data[pos_data] == 1:
                     if block[pos_zig] == 0:
                         pass
                     elif block[pos_zig] % 2 == 1:
