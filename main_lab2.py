@@ -21,5 +21,5 @@ for item in data:
 #for example
 stegano = bmp_stegano(img, data_byte)
 index, perc = stegano.lsb_stegano(25)
-img2 = io.imread('lsb_perc{}.bmp'.format(perc))
+img2 = io.imread('lsb_data/lsb_perc{}.bmp'.format(perc))
 stegano.extract_info(img2, index, perc)

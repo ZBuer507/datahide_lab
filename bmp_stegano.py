@@ -43,7 +43,7 @@ class bmp_stegano:
                     flag = False
             l += 1
         img_stegano.reshape([self.x, self.y])
-        Image.fromarray(np.array(img_stegano, dtype=np.uint8)).save('lsb_perc{}.bmp'.format(perc))
+        Image.fromarray(np.array(img_stegano, dtype=np.uint8)).save('lsb_data/lsb_perc{}.bmp'.format(perc))
         return index, perc
 
     def extract_info(self, img, index, perc):
@@ -52,7 +52,7 @@ class bmp_stegano:
         for i in range(0, index):
             data.append(img[i//self.x][i%self.x])
         b = index//8
-        with open('lsb_perc{}_data.txt'.format(perc), "wb") as f:
+        with open('lsb_data/lsb_perc{}_data.txt'.format(perc), "wb") as f:
             for i in range(0, b):
                 tmp = data[i*8 : i*8+8]
                 t = 0
@@ -60,6 +60,5 @@ class bmp_stegano:
                 for j in tmp:
                     t += (j%2) * 2**n
                     n -= 1
-                if i == 0 : print(tmp, t)
                 f.write(bytes([t]))
         
