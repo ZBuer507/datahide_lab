@@ -1,4 +1,9 @@
+#F3 stegano
 jpeg.py jpeg2.py mqa24depth.py edited by mqa and zh
 DATE 4-19 zh add idct
-jpeg_stegano.py main.py editied by zjt
+jpeg_stegano.py main_lab1.py edited by zjt
+
+#LSB stegano and RS analysis
+bmp_stegano.py main_lab2.py edited by zjt
+
 README edited by zjt
