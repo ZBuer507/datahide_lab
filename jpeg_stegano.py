@@ -89,7 +89,7 @@ class jpeg_stegano:
                     if len(bin_seq) == self.length:
                         bin_seq = np.split(np.array(bin_seq), len(bin_seq)//8)
                         img_arr = np.array([int(''.join(item), 2) for item in bin_seq], dtype=np.uint8).reshape(secret_shape)
-                        Image.fromarray(img_arr).save('extract_img.jpg')
+                        Image.fromarray(img_arr).save('f3_data/extract_img.jpg')
                         return
 
     def process_after(self, secret_shape):
@@ -112,7 +112,7 @@ class jpeg_stegano:
                 stack_arr[y + j%8][x + j//8] = item[j%8][j//8]
                 j += 1
             i += 1
-        Image.fromarray(np.array([np.array(line) for line in stack_arr], dtype=np.uint8)).save('after.bmp')
+        Image.fromarray(np.array([np.array(line) for line in stack_arr], dtype=np.uint8)).save('f3_data/after.bmp')
 
     def process_before(self):
         codec, encoded = self.compress_pic_before()
@@ -134,7 +134,7 @@ class jpeg_stegano:
                 stack_arr[y + j%8][x + j//8] = item[j%8][j//8]
                 j += 1
             i += 1
-        Image.fromarray(np.array([np.array(line) for line in stack_arr], dtype=np.uint8)).save('before.bmp')
+        Image.fromarray(np.array([np.array(line) for line in stack_arr], dtype=np.uint8)).save('f3_data/before.bmp')
 
     def display_result(self, original_path, stegano_path, secret_path, extract_path):
         plt.subplot(2,2,1)

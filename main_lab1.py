@@ -6,9 +6,9 @@ from jpeg24depth import *
 from jpeg_stegano import *
 
 secret_shape = (40, 40)
-Image.open('HELLOWORLD.bmp').convert('L').resize(secret_shape, Image.ANTIALIAS).save('HELLOWORLD.jpg')
+Image.open('HELLOWORLD.bmp').convert('L').resize(secret_shape, Image.ANTIALIAS).save('f3_data/HELLOWORLD.jpg')
 img = io.imread("lena512.bmp")
-img2 = io.imread("HELLOWORLD.jpg")
+img2 = io.imread("f3_data/HELLOWORLD.jpg")
 process = jpeg_24bit_depth(img)
 data = []
 data0 = img2.flatten()
@@ -23,4 +23,4 @@ for num in data0:
 stegano = jpeg_stegano(process.zig_data, data, process)
 stegano.process_before()
 stegano.process_after(secret_shape)
-stegano.display_result('before.bmp', 'after.bmp', 'HELLOWORLD.jpg', 'extract_img.jpg')
+stegano.display_result('f3_data/before.bmp', 'f3_data/after.bmp', 'f3_data/HELLOWORLD.jpg', 'f3_data/extract_img.jpg')
