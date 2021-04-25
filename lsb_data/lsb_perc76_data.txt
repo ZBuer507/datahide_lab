@@ -1,0 +1,1568 @@
+# edited by zjt
+import cv2
+import numpy as np
+from PIL import Image
+from dahuffman import HuffmanCodec
+from matplotlib import pyplot as plt
+import copy
+import sys
+sys.path.append("D:\计算机\WORKS\信息隐藏技术\datahide_lab")
+from jpeg24depth import *
+
+SHOW = True
+
+class jpeg_stegano:
+    process = None
+    zig_data = None
+    data = None
+    zig_data_ste = None
+    length = 0
+
+    def __init__(self, zig_data, data, process):
+        self.zig_data = zig_data
+        self.data = data
+        self.process = process
+        self.f3_stegano()
+
+    def compress_pic(self):
+        sequence = tuple([tuple(line) for line in self.zig_data_ste])
+        codec = HuffmanCodec.from_data(sequence)
+        encoded = codec.encode(sequence)
+        return codec, encoded
+
+    def compress_pic_before(self):
+        sequence = tuple([tuple(line) for line in self.zig_data])
+        codec = HuffmanCodec.from_data(sequence)
+        encoded = codec.encode(sequence)
+        return codec, encoded
+
+    def stegano_compress(self):
+        codec, encoded = self.compress_pic()
+        return codec, encoded
+
+    def decompress_reverse(self, codec, encoded, secret_shape):
+        decoded_blocks = self.decompress_pic(codec, encoded)
+        self.extrct_info(decoded_blocks, secret_shape)
+        self.reverse_process(decoded_blocks)
+
+    def f3_stegano(self):
+        self.zig_data_ste = []
+        flag = False
+        pos_data = 0
+        for item in self.zig_data:
+            pos_zig = 0
+            block = copy.deepcopy(item)
+            while pos_zig < 64 and pos_data < len(self.data) and not flag:
+                if self.data[pos_data] == 1:
+                    if block[pos_zig] == 0:
+                        pass
+                    elif block[pos_zig] % 2 == 1:
+                        pos_data += 1
+                    else:
+                        block[pos_zig] = (abs(block[pos_zig]) - 1) * (abs(block[pos_zig]) // block[pos_zig])
+                        pos_data += 1
+                else:
+                    if block[pos_zig] == 0:
+                        pass
+                    elif block[pos_zig] == 1 or block[pos_zig] == -1:
+                        block[pos_zig] = 0
+                    elif block[pos_zig] % 2 == 0:
+                        pos_data += 1
+                    else:
+                        block[pos_zig] = (abs(block[pos_zig]) - 1) * (abs(block[pos_zig]) // block[pos_zig])
+                        pos_data += 1
+                pos_zig += 1
+            self.zig_data_ste.append(block)
+            if pos_data == len(self.data) and not flag:
+                flag = True
+        self.length = pos_data
+        print(self.length)
+
+    def extrct_info(self, decoded_blocks, secret_shape):
+        bin_seq = []
+        for i in range(len(decoded_blocks)):
+            block = decoded_blocks[i]
+            length = len(block)
+            for m in range(length):
+                if block[m]:
+                    bin_seq.append(str(abs(block[m])%2))
+                    if len(bin_seq) == self.length:
+                        bin_seq = np.split(np.array(bin_seq), len(bin_seq)//8)
+                        img_arr = np.array([int(''.join(item), 2) for item in bin_seq], dtype=np.uint8).reshape(secret_shape)
+                        Image.fromarray(img_arr).save('extract_img.jpg')
+                        return
+
+    def process_after(self, secret_shape):
+        codec, encoded = self.compress_pic()
+        stegano_blocks = codec.decode(encoded)
+        self.extrct_info(stegano_blocks, secret_shape)
+        zig_data = [list(line) for line in stegano_blocks]
+        dzz_data = self.process.dezigzag(zig_data)
+        dequantization_data = self.process.dequantization(dzz_data)
+        idct_data = self.process.idct(dequantization_data)
+        stack_arr = []
+        for i in range(self.process.width):
+            stack_arr += [[None]*self.process.height]
+        i = 0
+        for item in idct_data:
+            j = 0
+            x = (i%self.process.block_per_line)*8
+            y = (i//self.process.block_per_line)*8
+            while j <= 63:
+                stack_arr[y + j%8][x + j//8] = item[j%8][j//8]
+                j += 1
+            i += 1
+        Image.fromarray(np.array([np.array(line) for line in stack_arr], dtype=np.uint8)).save('after.bmp')
+
+    def process_before(self):
+        codec, encoded = self.compress_pic_before()
+        decoded = codec.decode(encoded)
+        stegano_blocks = [line for line in decoded]
+        zig_data = [list(line) for line in stegano_blocks]
+        dzz_data = self.process.dezigzag(zig_data)
+        dequantization_data = self.process.dequantization(dzz_data)
+        idct_data = self.process.idct(dequantization_data)
+        stack_arr = []
+        for i in range(self.process.width):
+            stack_arr += [[None]*self.process.height]
+        i = 0
+        for item in idct_data:
+            j = 0
+            x = (i%self.process.block_per_line)*8
+            y = (i//self.process.block_per_line)*8
+            while j <= 63:
+                stack_arr[y + j%8][x + j//8] = item[j%8][j//8]
+                j += 1
+            i += 1
+        Image.fromarray(np.array([np.array(line) for line in stack_arr], dtype=np.uint8)).save('before.bmp')
+
+    def display_result(self, original_path, stegano_path, secret_path, extract_path):
+        plt.subplot(2,2,1)
+        plt.imshow(cv2.cvtColor(cv2.imread(original_path), cv2.COLOR_BGR2RGB))
+        plt.title('before')
+        plt.axis('off')
+        
+        plt.subplot(2, 2, 2)
+        plt.imshow(cv2.cvtColor(cv2.imread(stegano_path), cv2.COLOR_BGR2RGB))
+        plt.title('after')
+        plt.axis('off')
+        
+        plt.subplot(2, 2, 3)
+        plt.imshow(cv2.cvtColor(cv2.imread(secret_path), cv2.COLOR_BGR2RGB))
+        plt.title('secret')
+        plt.axis('off')
+
+        plt.subplot(2, 2, 4)
+        plt.imshow(cv2.cvtColor(cv2.imread(extract_path), cv2.COLOR_BGR2RGB))
+        plt.title('extracted')
+        plt.axis('off')
+
+        plt.savefig('compare_result.jpg')
+        if SHOW: plt.show()
+-DOCSTART- -X- -X- O
+
+SOCCER NN B-NP
+- : O
+JAPAN NNP B-NP
+GET VB B-VP
+LUCKY NNP B-NP
+WIN NNP I-NP
+, , O
+CHINA NNP B-NP
+IN IN B-PP
+SURPRISE DT B-NP
+DEFEAT NN I-NP
+. . O
+
+Nadim NNP B-NP
+Ladki NNP I-NP
+
+AL-AIN NNP B-NP
+, , O
+United NNP B-NP
+Arab NNP I-NP
+Emirates NNPS I-NP
+1996-12-06 CD I-NP
+
+Japan NNP B-NP
+began VBD B-VP
+the DT B-NP
+defence NN I-NP
+of IN B-PP
+their PRP$ B-NP
+Asian JJ I-NP
+Cup NNP I-NP
+title NN I-NP
+with IN B-PP
+a DT B-NP
+lucky JJ I-NP
+2-1 CD I-NP
+win VBP B-VP
+against IN B-PP
+Syria NNP B-NP
+in IN B-PP
+a DT B-NP
+Group NNP I-NP
+C NNP I-NP
+championship NN I-NP
+match NN I-NP
+on IN B-PP
+Friday NNP B-NP
+. . O
+
+But CC O
+China NNP B-NP
+saw VBD B-VP
+their PRP$ B-NP
+luck NN I-NP
+desert VB B-VP
+them PRP B-NP
+in IN B-PP
+the DT B-NP
+second NN I-NP
+match NN I-NP
+of IN B-PP
+the DT B-NP
+group NN I-NP
+, , O
+crashing VBG B-VP
+to TO B-PP
+a DT B-NP
+surprise NN I-NP
+2-0 CD I-NP
+defeat NN I-NP
+to TO B-PP
+newcomers NNS B-NP
+Uzbekistan NNP I-NP
+. . O
+
+China NNP B-NP
+controlled VBD B-VP
+most JJS B-NP
+of IN B-PP
+the DT B-NP
+match NN I-NP
+and CC O
+saw VBD B-VP
+several JJ B-NP
+chances NNS I-NP
+missed VBD B-VP
+until IN B-SBAR
+the DT B-NP
+78th JJ I-NP
+minute NN I-NP
+when WRB B-ADVP
+Uzbek NNP B-NP
+striker NN I-NP
+Igor JJ B-NP
+Shkvyrin NNP I-NP
+took VBD B-VP
+advantage NN B-NP
+of IN B-PP
+a DT B-NP
+misdirected JJ I-NP
+defensive JJ I-NP
+header NN I-NP
+to TO B-VP
+lob VB I-VP
+the DT B-NP
+ball NN I-NP
+over IN B-PP
+the DT B-NP
+advancing VBG I-NP
+Chinese JJ I-NP
+keeper NN I-NP
+and CC O
+into IN B-PP
+an DT B-NP
+empty JJ I-NP
+net NN I-NP
+. . O
+
+Oleg NNP B-NP
+Shatskiku NNP I-NP
+made VBD B-VP
+sure JJ B-ADJP
+of IN B-PP
+the DT B-NP
+win VBP B-VP
+in IN B-PP
+injury NN B-NP
+time NN I-NP
+, , O
+hitting VBG B-VP
+an DT B-NP
+unstoppable JJ I-NP
+left VBD B-VP
+foot NN B-NP
+shot NN I-NP
+from IN B-PP
+just RB B-NP
+outside IN B-PP
+the DT B-NP
+area NN I-NP
+. . O
+
+The DT B-NP
+former JJ I-NP
+Soviet JJ I-NP
+republic NN I-NP
+was VBD B-VP
+playing VBG I-VP
+in IN B-PP
+an DT B-NP
+Asian NNP I-NP
+Cup NNP I-NP
+finals NNS I-NP
+tie NN I-NP
+for IN B-PP
+the DT B-NP
+first JJ I-NP
+time NN I-NP
+. . O
+
+Despite IN B-PP
+winning VBG B-VP
+the DT B-NP
+Asian JJ I-NP
+Games NNPS I-NP
+title NN I-NP
+two CD B-NP
+years NNS I-NP
+ago RB B-ADVP
+, , O
+Uzbekistan NNP B-NP
+are VBP B-VP
+in IN B-PP
+the DT B-NP
+finals NNS I-NP
+as IN B-SBAR
+outsiders NNS B-NP
+. . O
+
+Two CD B-NP
+goals NNS I-NP
+from IN B-PP
+defensive JJ B-NP
+errors NNS I-NP
+in IN B-PP
+the DT B-NP
+last JJ I-NP
+six CD I-NP
+minutes NNS I-NP
+allowed VBD B-VP
+Japan NNP B-NP
+to TO B-VP
+come VB I-VP
+from IN B-PP
+behind NN B-NP
+and CC O
+collect VB B-VP
+all DT B-NP
+three CD I-NP
+points NNS I-NP
+from IN B-PP
+their PRP$ B-NP
+opening NN I-NP
+meeting NN I-NP
+against IN B-PP
+Syria NNP B-NP
+. . O
+
+Takuya NNP B-NP
+Takagi NNP I-NP
+scored VBD B-VP
+the DT B-NP
+winner NN I-NP
+in IN B-PP
+the DT B-NP
+88th JJ I-NP
+minute NN I-NP
+, , O
+rising VBG B-VP
+to TO I-VP
+head VB I-VP
+a DT B-NP
+Hiroshige NNP I-NP
+Yanagimoto NNP I-NP
+cross VB B-VP
+towards IN B-PP
+the DT B-NP
+Syrian JJ I-NP
+goal NN I-NP
+which WDT B-NP
+goalkeeper VBD B-VP
+Salem NNP B-NP
+Bitar NNP I-NP
+appeared VBD B-VP
+to TO I-VP
+have VB I-VP
+covered VBN I-VP
+but CC O
+then RB B-VP
+allowed VBN I-VP
+to TO I-VP
+slip VB I-VP
+into IN B-PP
+the DT B-NP
+net NN I-NP
+. . O
+
+It PRP B-NP
+was VBD B-VP
+the DT B-NP
+second JJ I-NP
+costly JJ I-NP
+blunder NN I-NP
+by IN B-PP
+Syria NNP B-NP
+in IN B-PP
+four CD B-NP
+minutes NNS I-NP
+. . O
+
+Defender NNP B-NP
+Hassan NNP I-NP
+Abbas NNP I-NP
+rose VBD B-VP
+to TO I-VP
+intercept VB I-VP
+a DT B-NP
+long JJ I-NP
+ball NN I-NP
+into IN B-PP
+the DT B-NP
+area NN I-NP
+in IN B-PP
+the DT B-NP
+84th JJ I-NP
+minute NN I-NP
+but CC O
+only RB B-ADVP
+managed VBD B-VP
+to TO I-VP
+divert VB I-VP
+it PRP B-NP
+into IN B-PP
+the DT B-NP
+top JJ I-NP
+corner NN I-NP
+of IN B-PP
+Bitar NN B-NP
+'s POS B-NP
+goal NN I-NP
+. . O
+
+Nader NNP B-NP
+Jokhadar NNP I-NP
+had VBD B-VP
+given VBN I-VP
+Syria NNP B-NP
+the DT B-NP
+lead NN I-NP
+with IN B-PP
+a DT B-NP
+well-struck NN I-NP
+header NN I-NP
+in IN B-PP
+the DT B-NP
+seventh JJ I-NP
+minute NN I-NP
+. . O
+
+Japan NNP B-NP
+then RB B-ADVP
+laid VBD B-VP
+siege NN B-NP
+to TO B-PP
+the DT B-NP
+Syrian JJ I-NP
+penalty NN I-NP
+area NN I-NP
+for IN B-PP
+most JJS B-NP
+of IN B-PP
+the DT B-NP
+game NN I-NP
+but CC O
+rarely RB B-VP
+breached VBD I-VP
+the DT B-NP
+Syrian JJ I-NP
+defence NN I-NP
+. . O
+
+Bitar NN B-NP
+pulled VBD B-VP
+off RP B-PRT
+fine JJ B-NP
+saves VBZ B-VP
+whenever WRB B-ADVP
+they PRP B-NP
+did VBD B-VP
+. . O
+
+Japan NNP B-NP
+coach NN I-NP
+Shu NNP I-NP
+Kamo NNP I-NP
+said VBD B-VP
+: : O
+' '' O
+' POS B-NP
+The DT I-NP
+Syrian JJ I-NP
+own JJ I-NP
+goal NN I-NP
+proved VBD B-VP
+lucky JJ B-ADJP
+for IN B-PP
+us PRP B-NP
+. . O
+
+The DT B-NP
+Syrians NNPS I-NP
+scored VBD B-VP
+early JJ B-NP
+and CC O
+then RB B-VP
+played VBN I-VP
+defensively RB B-ADVP
+and CC O
+adopted VBD B-VP
+long RB I-VP
+balls VBZ I-VP
+which WDT B-NP
+made VBD B-VP
+it PRP B-NP
+hard JJ B-ADJP
+for IN B-PP
+us PRP B-NP
+. . O
+' '' O
+
+' '' O
+
+Japan NNP B-NP
+, , O
+co-hosts VBZ B-VP
+of IN B-PP
+the DT B-NP
+World NNP I-NP
+Cup NNP I-NP
+in IN B-PP
+2002 CD B-NP
+and CC O
+ranked VBD B-VP
+20th JJ B-NP
+in IN B-PP
+the DT B-NP
+world NN I-NP
+by IN B-PP
+FIFA NNP B-NP
+, , O
+are VBP B-VP
+favourites JJ B-ADJP
+to TO B-VP
+regain VB I-VP
+their PRP$ B-NP
+title NN I-NP
+here RB B-ADVP
+. . O
+
+Hosts NNPS B-NP
+UAE NNP I-NP
+play NN I-NP
+Kuwait NNP I-NP
+and CC O
+South NNP B-NP
+Korea NNP I-NP
+take VBP B-VP
+on IN B-PP
+Indonesia NNP B-NP
+on IN B-PP
+Saturday NNP B-NP
+in IN B-PP
+Group NNP B-NP
+A NNP I-NP
+matches VBZ B-VP
+. . O
+
+All DT B-NP
+four CD I-NP
+teams NNS I-NP
+are VBP B-VP
+level NN B-NP
+with IN B-PP
+one CD B-NP
+point NN I-NP
+each DT B-NP
+from IN B-PP
+one CD B-NP
+game NN I-NP
+. . O
+
+-DOCSTART- -X- -X- O
+
+RUGBY NNP B-NP
+UNION NN I-NP
+- : O
+CUTTITTA NNP B-NP
+BACK NNP I-NP
+FOR IN B-PP
+ITALY JJ B-NP
+AFTER NNP I-NP
+A NNP I-NP
+YEAR NNP I-NP
+. . O
+
+ROME VB B-NP
+1996-12-06 CD I-NP
+
+Italy NNP B-NP
+recalled VBD B-VP
+Marcello NNP B-NP
+Cuttitta NNP I-NP
+
+on IN B-PP
+Friday NNP B-NP
+for IN B-PP
+their PRP$ B-NP
+friendly JJ I-NP
+against IN B-PP
+Scotland NNP B-NP
+at IN B-PP
+Murrayfield NNP B-NP
+more JJR B-ADJP
+than IN B-PP
+a DT B-NP
+year NN I-NP
+after IN B-PP
+the DT B-NP
+30-year-old JJ I-NP
+wing NN I-NP
+announced VBD B-VP
+he PRP B-NP
+was VBD B-VP
+retiring VBG I-VP
+following VBG B-PP
+differences NNS B-NP
+over IN B-PP
+selection NN B-NP
+. . O
+
+Cuttitta NNP B-NP
+, , O
+who WP B-NP
+trainer NN I-NP
+George NNP I-NP
+Coste NNP I-NP
+said VBD B-VP
+was VBD B-VP
+certain JJ B-ADJP
+to TO B-VP
+play VB I-VP
+on IN B-PP
+Saturday NNP B-NP
+week NN I-NP
+, , O
+was VBD B-VP
+named VBN I-VP
+in IN B-PP
+a DT B-NP
+21-man JJ I-NP
+squad NN I-NP
+lacking VBG B-VP
+only RB B-NP
+two CD I-NP
+of IN B-PP
+the DT B-NP
+team NN I-NP
+beaten VBN B-VP
+54-21 JJ B-ADJP
+by IN B-PP
+England NNP B-NP
+at IN B-PP
+Twickenham NNP B-NP
+last JJ B-NP
+month NN I-NP
+. . O
+
+Stefano NNP B-NP
+Bordon NNP I-NP
+is VBZ B-VP
+out RP B-PRT
+through IN B-PP
+illness NN B-NP
+and CC O
+Coste NNP B-NP
+said VBD B-VP
+he PRP B-NP
+had VBD B-VP
+dropped VBN I-VP
+back RB B-ADVP
+row NN B-NP
+Corrado NNP B-NP
+Covi NNP I-NP
+, , O
+who WP B-NP
+had VBD B-VP
+been VBN I-VP
+recalled VBD B-VP
+for IN B-PP
+the DT B-NP
+England NNP I-NP
+game NN I-NP
+after IN B-PP
+five CD B-NP
+years NNS I-NP
+out IN B-PP
+of IN B-PP
+the DT B-NP
+national JJ I-NP
+team NN I-NP
+. . O
+
+Cuttitta NNP B-NP
+announced VBD B-VP
+his PRP$ B-NP
+retirement NN I-NP
+after IN B-PP
+the DT B-NP
+1995 CD I-NP
+World NNP I-NP
+Cup NNP I-NP
+, , O
+where WRB B-ADVP
+he PRP B-NP
+took VBD B-VP
+issue NN B-NP
+with IN B-PP
+being VBG B-VP
+dropped VBN I-VP
+from IN B-PP
+the DT B-NP
+Italy NNP I-NP
+side NN I-NP
+that WDT B-NP
+faced VBD B-VP
+England NNP B-NP
+in IN B-PP
+the DT B-NP
+pool NN I-NP
+stages NNS I-NP
+. . O
+
+Coste NNP B-NP
+said VBD B-VP
+he PRP B-NP
+had VBD B-VP
+approached VBN I-VP
+the DT B-NP
+player NN I-NP
+two CD B-NP
+months NNS I-NP
+ago RB B-ADVP
+about RB B-NP
+a DT I-NP
+comeback NN I-NP
+. . O
+
+" " O
+He PRP B-NP
+ended VBD B-VP
+the DT B-NP
+World NNP I-NP
+Cup NNP I-NP
+on IN B-PP
+the DT B-NP
+wrong JJ I-NP
+note NN I-NP
+, , O
+" " O
+Coste NNP B-NP
+said VBD B-VP
+. . O
+
+" " O
+I PRP B-NP
+thought VBD B-VP
+it PRP B-NP
+would MD B-VP
+be VB I-VP
+useful JJ B-ADJP
+to TO B-VP
+have VB I-VP
+him PRP B-NP
+back RB B-ADVP
+and CC O
+he PRP B-NP
+said VBD B-VP
+he PRP B-NP
+would MD B-VP
+be VB I-VP
+available JJ B-ADJP
+. . O
+
+I PRP B-NP
+think VBP B-VP
+now RB I-VP
+is VBZ I-VP
+the DT B-NP
+right JJ I-NP
+time NN I-NP
+for IN B-SBAR
+him PRP B-NP
+to TO B-VP
+return VB I-VP
+. . O
+" " O
+
+Squad VB B-VP
+: : O
+Javier NNP B-NP
+Pertile NNP I-NP
+, , O
+Paolo NNP B-NP
+Vaccari NNP I-NP
+, , O
+Marcello NNP B-NP
+Cuttitta NNP I-NP
+, , O
+Ivan NNP B-NP
+Francescato NNP I-NP
+, , O
+Leandro NNP B-NP
+Manteri NNP I-NP
+, , O
+Diego NNP B-NP
+Dominguez NNP I-NP
+, , O
+Francesco NNP B-NP
+Mazzariol NNP I-NP
+, , O
+Alessandro NNP B-NP
+Troncon NNP I-NP
+, , O
+Orazio NNP B-NP
+Arancio NNP I-NP
+, , O
+Andrea NNP B-NP
+Sgorlon NNP I-NP
+, , O
+Massimo NNP B-NP
+Giovanelli NNP I-NP
+, , O
+Carlo NNP B-NP
+Checchinato NNP I-NP
+, , O
+Walter NNP B-NP
+Cristofoletto NNP I-NP
+, , O
+Franco NNP B-NP
+Properzi NNP I-NP
+Curti NNP I-NP
+, , O
+Carlo NNP B-NP
+Orlandi NNP I-NP
+, , O
+Massimo NNP B-NP
+Cuttitta NNP I-NP
+, , O
+Giambatista NNP B-NP
+Croci NNP I-NP
+, , O
+Gianluca NNP B-NP
+Guidi NNP I-NP
+, , O
+Nicola NNP B-NP
+Mazzucato NNP I-NP
+, , O
+Alessandro NNP B-NP
+Moscardi NNP I-NP
+, , O
+Andrea NNP B-NP
+Castellani NNP I-NP
+. . O
+
+-DOCSTART- -X- -X- O
+
+SOCCER NN B-NP
+- : O
+LATE JJ B-NP
+GOALS NNS I-NP
+GIVE VBP B-VP
+JAPAN NNP B-NP
+WIN NNP I-NP
+OVER IN B-PP
+SYRIA NNP B-NP
+. . O
+
+AL-AIN NNP B-NP
+, , O
+United NNP B-NP
+Arab NNP I-NP
+Emirates NNPS I-NP
+1996-12-06 CD I-NP
+
+Two CD B-NP
+goals NNS I-NP
+in IN B-PP
+the DT B-NP
+last JJ I-NP
+six CD I-NP
+minutes NNS I-NP
+gave VBD B-VP
+holders NNS B-NP
+Japan NNP I-NP
+an DT B-NP
+uninspiring JJ I-NP
+2-1 CD I-NP
+Asian NNP I-NP
+Cup NNP I-NP
+victory NN I-NP
+over IN B-PP
+Syria NNP B-NP
+on IN B-PP
+Friday NNP B-NP
+. . O
+
+Takuya NNP B-NP
+Takagi NNP I-NP
+headed VBD B-VP
+the DT B-NP
+winner NN I-NP
+in IN B-PP
+the DT B-NP
+88th JJ I-NP
+minute NN I-NP
+of IN B-PP
+the DT B-NP
+group NN I-NP
+C NNP I-NP
+game NN I-NP
+after IN B-PP
+goalkeeper NN B-NP
+Salem NNP I-NP
+Bitar NNP I-NP
+spoiled JJ I-NP
+a DT I-NP
+mistake-free NN I-NP
+display NN I-NP
+by IN B-PP
+allowing VBG B-VP
+the DT B-NP
+ball NN I-NP
+to TO B-VP
+slip VB I-VP
+under IN B-PP
+his PRP$ B-NP
+body NN I-NP
+. . O
+
+It PRP B-NP
+was VBD B-VP
+the DT B-NP
+second JJ I-NP
+Syrian JJ I-NP
+defensive JJ I-NP
+blunder NN I-NP
+in IN B-PP
+four CD B-NP
+minutes NNS I-NP
+. . O
+
+Defender NNP B-NP
+Hassan NNP I-NP
+Abbas NNP I-NP
+rose VBD B-VP
+to TO I-VP
+intercept VB I-VP
+a DT B-NP
+long JJ I-NP
+ball NN I-NP
+into IN B-PP
+the DT B-NP
+area NN I-NP
+in IN B-PP
+the DT B-NP
+84th JJ I-NP
+minute NN I-NP
+but CC O
+only RB B-ADVP
+managed VBD B-VP
+to TO I-VP
+divert VB I-VP
+it PRP B-NP
+into IN B-PP
+the DT B-NP
+top JJ I-NP
+corner NN I-NP
+of IN B-PP
+Bitar NN B-NP
+'s POS B-NP
+goal NN I-NP
+. . O
+
+Syria NNP B-NP
+had VBD B-VP
+taken VBN I-VP
+the DT B-NP
+lead NN I-NP
+from IN B-PP
+their PRP$ B-NP
+first JJ I-NP
+serious JJ I-NP
+attack NN I-NP
+in IN B-PP
+the DT B-NP
+seventh JJ I-NP
+minute NN I-NP
+. . O
+
+Nader NNP B-NP
+Jokhadar NNP I-NP
+headed VBD B-VP
+a DT B-NP
+cross NN I-NP
+from IN B-PP
+the DT B-NP
+right NN I-NP
+by IN B-PP
+Ammar NNP B-NP
+Awad NNP I-NP
+into IN B-PP
+the DT B-NP
+top JJ I-NP
+right NN I-NP
+corner NN I-NP
+of IN B-PP
+Kenichi NNP B-NP
+Shimokawa NNP I-NP
+'s POS B-NP
+goal NN I-NP
+. . O
+
+Japan NNP B-NP
+then RB B-ADVP
+laid VBD B-VP
+siege NN B-NP
+to TO B-PP
+the DT B-NP
+Syrian JJ I-NP
+penalty NN I-NP
+area NN I-NP
+and CC O
+had VBD B-VP
+a DT B-NP
+goal NN I-NP
+disallowed VBD B-VP
+for IN B-PP
+offside NN B-ADVP
+in IN B-PP
+the DT B-NP
+16th JJ I-NP
+minute NN I-NP
+. . O
+
+A DT B-NP
+minute NN I-NP
+later RB B-ADVP
+, , O
+Bitar NN B-NP
+produced VBD B-VP
+a DT B-NP
+good JJ I-NP
+double JJ I-NP
+save VB B-VP
+, , O
+first JJ B-NP
+from IN B-PP
+Kazuyoshi NNP B-NP
+Miura NNP I-NP
+'s POS B-NP
+header NN I-NP
+and CC O
+then RB B-VP
+blocked VBN I-VP
+a DT B-NP
+Takagi NNP I-NP
+follow-up JJ I-NP
+shot NN I-NP
+. . O
+
+Bitar JJ B-NP
+saved JJ I-NP
+well NN I-NP
+again RB B-ADVP
+from IN B-PP
+Miura NNP B-NP
+in IN B-PP
+the DT B-NP
+37th JJ I-NP
+minute NN I-NP
+, , O
+parrying VBG B-VP
+away RB B-ADVP
+his PRP$ B-NP
+header NN I-NP
+from IN B-PP
+a DT B-NP
+corner NN I-NP
+. . O
+
+Japan NNP B-NP
+started VBD B-VP
+the DT B-NP
+second JJ I-NP
+half NN I-NP
+brightly RB B-ADVP
+but CC O
+Bitar NNP B-NP
+denied VBD B-VP
+them PRP B-NP
+an DT B-NP
+equaliser NN I-NP
+when WRB B-ADVP
+he PRP B-NP
+dived VBD B-VP
+to TO B-PP
+his PRP$ B-NP
+right NN I-NP
+to TO B-VP
+save VB I-VP
+Naoki NNP B-NP
+Soma NNP I-NP
+'s POS B-NP
+low JJ I-NP
+drive NN I-NP
+in IN B-PP
+the DT B-NP
+53rd CD I-NP
+minute NN I-NP
+. . O
+
+Japan NNP B-NP
+: : O
+19 CD B-NP
+- : I-NP
+Kenichi NNP I-NP
+Shimokawa NNP I-NP
+, , O
+2 CD B-NP
+- : I-NP
+Hiroshige NNP I-NP
+Yanagimoto NNP I-NP
+, , O
+3 CD B-NP
+- : I-NP
+Naoki NNP B-NP
+Soma NNP I-NP
+, , O
+4 CD B-NP
+- : I-NP
+Masami NNP I-NP
+Ihara NNP I-NP
+, , O
+5 CD B-NP
+- : I-NP
+Norio NNP I-NP
+Omura NNP I-NP
+, , O
+6 CD B-NP
+- : I-NP
+Motohiro NNP I-NP
+Yamaguchi NNP I-NP
+, , O
+8 CD B-NP
+- : I-NP
+Masakiyo NNP I-NP
+Maezono NNP I-NP
+( ( O
+7 CD B-NP
+- : I-NP
+Yasuto NNP I-NP
+Honda NNP I-NP
+71 CD I-NP
+) ) O
+, , O
+9 CD B-NP
+- : I-NP
+Takuya NNP I-NP
+Takagi NNP I-NP
+, , O
+10 CD B-NP
+- : I-NP
+Hiroshi NNP I-NP
+Nanami NNP I-NP
+, , O
+11 CD B-NP
+- : I-NP
+Kazuyoshi NNP I-NP
+Miura NNP I-NP
+, , O
+15 CD B-NP
+- : I-NP
+Hiroaki NNP I-NP
+Morishima NNP I-NP
+( ( O
+14 CD B-NP
+- : I-NP
+Masayuki NNP I-NP
+Okano NNP I-NP
+75 CD I-NP
+) ) O
+. . O
+
+Syria NNP B-NP
+: : O
+24 CD B-NP
+- : I-NP
+Salem NNP I-NP
+Bitar NNP I-NP
+, , O
+3 CD B-NP
+- : I-NP
+Bachar NNP I-NP
+Srour NNP I-NP
+; : O
+4 CD B-NP
+- : I-NP
+Hassan NNP I-NP
+Abbas NNP I-NP
+, , O
+5 CD B-NP
+- : I-NP
+Tarek NNP I-NP
+Jabban NNP I-NP
+, , O
+6 CD B-NP
+- : I-NP
+Ammar NNP I-NP
+Awad NNP I-NP
+( ( O
+9 CD B-NP
+- : I-NP
+Louay JJ I-NP
+Taleb NNP I-NP
+69 CD I-NP
+) ) O
+, , O
+8 CD B-NP
+- : I-NP
+Nihad NNP I-NP
+al-Boushi NNS I-NP
+, , O
+10 CD B-NP
+- : I-NP
+Mohammed NNP I-NP
+Afash NNP I-NP
+, , O
+12 CD B-NP
+- : I-NP
+Ali NNP I-NP
+Dib NNP I-NP
+, , O
+13 CD B-NP
+- : I-NP
+Abdul NNP I-NP
+Latif NNP I-NP
+Helou NNP I-NP
+( ( O
+17 CD B-NP
+- : I-NP
+Ammar NNP I-NP
+Rihawiy NNP I-NP
+46 CD I-NP
+) ) O
+, , O
+14 CD B-NP
+- : I-NP
+Khaled VBD B-VP
+Zaher NNP B-NP
+; : O
+16 CD B-NP
+- : I-NP
+Nader NNP I-NP
+Jokhadar NNP I-NP
+. . O
+
+-DOCSTART- -X- -X- O
+
+FREESTYLE NNP B-NP
+SKIING-WORLD NNP I-NP
+CUP NNP I-NP
+MOGUL NNP I-NP
+RESULTS NNS I-NP
+. . O
+
+TIGNES NNP B-NP
+, , O
+France NNP B-NP
+1996-12-06 CD I-NP
+
+Results NNS B-NP
+of IN B-PP
+the DT B-NP
+World NNP I-NP
+Cup NNP I-NP
+
+freestyle JJ B-NP
+skiing NN I-NP
+moguls NNS I-NP
+competition NN I-NP
+on IN B-PP
+Friday NNP B-NP
+: : O
+
+Men NN B-NP
+
+1. CD B-NP
+Jesper NNP I-NP
+Ronnback NNP I-NP
+( ( O
+Sweden NNP B-NP
+) ) O
+25.76 CD B-NP
+points NNS I-NP
+
+2. CD B-NP
+Andrei NNP B-NP
+Ivanov NNP I-NP
+( ( O
+Russia NNP B-NP
+) ) O
+24.88 CD B-NP
+
+3. NNP B-NP
+Ryan NNP I-NP
+Johnson NNP I-NP
+( ( O
+Canada NNP B-NP
+) ) O
+24.57 CD B-NP
+
+4. CD B-NP
+Jean-Luc NNP I-NP
+Brassard NNP I-NP
+( ( O
+Canada NNP B-NP
+) ) O
+24.40 CD B-NP
+
+5. CD B-NP
+Korneilus NNP I-NP
+Hole NNP I-NP
+( ( O
+Norway NNP B-NP
+) ) O
+23.92 CD B-NP
+
+6. CD B-NP
+Jeremie NNP I-NP
+Collomb-Patton NNP I-NP
+( ( O
+France NNP B-NP
+) ) O
+23.87 CD B-NP
+
+7. NNP B-NP
+Jim NNP I-NP
+Moran NNP I-NP
+( ( O
+U.S. NNP B-NP
+) ) O
+23.25 CD B-NP
+
+8. NNP B-NP
+Dominick NNP I-NP
+Gauthier NNP I-NP
+( ( O
+Canada NNP B-NP
+) ) O
+22.73 CD B-NP
+
+9. CD B-NP
+Johann NNP I-NP
+Gregoire NNP I-NP
+( ( O
+France NNP B-NP
+) ) O
+22.58 CD B-NP
+
+10. CD B-NP
+Troy NNP I-NP
+Benson NNP I-NP
+( ( O
+U.S. NNP B-NP
+) ) O
+22.56 CD B-NP
+
+Women NNS B-NP
+
+1. CD B-NP
+Tatjana NNP I-NP
+Mittermayer NNP I-NP
+( ( O
+Germany NNP B-NP
+) ) O
+24.32 CD B-NP
+
+2. NNP B-NP
+Candice NNP I-NP
+Gilg NNP I-NP
+( ( O
+France NNP B-NP
+) ) O
+24.31 CD B-NP
+
+3. NNP B-NP
+Minna NNP I-NP
+Karhu NNP I-NP
+( ( O
+Finland NNP B-NP
+) ) O
+24.05 CD B-NP
+
+4. CD B-NP
+Tae NNP I-NP
+Satoya NNP I-NP
+( ( O
+Japan NNP B-NP
+) ) O
+23.75 CD B-NP
+
+5. NNP B-NP
+Ann NNP I-NP
+Battellle NNP I-NP
+( ( O
+U.S. NNP B-NP
+) ) O
+23.56 CD B-NP
+
+6. NNP B-NP
+Donna NNP I-NP
+Weinbrecht NNP I-NP
+( ( O
+U.S. NNP B-NP
+) ) O
+22.48 CD B-NP
+
+7. NNP B-NP
+Liz NNP I-NP
+McIntyre NNP I-NP
+( ( O
+U.S. NNP B-NP
+) ) O
+22.00 CD B-NP
+
+8. NNP B-NP
+Elena NNP I-NP
+Koroleva NNP I-NP
+( ( O
+Russia NNP B-NP
+) ) O
+21.77 CD B-NP
+
+9. CD B-NP
+Ljudmila NNP I-NP
+Dymchenko NNP I-NP
+( ( O
+Russia NNP B-NP
+) ) O
+21.59 CD B-NP
+
+10. CD B-NP
+Katleen NNP I-NP
+Allais NNPS I-NP
+( ( O
+France NNP B-NP
+) ) O
+21.58 CD B-NP
+
+-DOCSTART- -X- -X- O
+
+SOCCER NN B-NP
+- : O
+ASIAN NNP B-NP
+CUP NNP I-NP
+GROUP NNP I-NP
+C NNP I-NP
+RESULTS NNS I-NP
+. . O
+
+AL-AIN NNP B-NP
+, , O
+United NNP B-NP
+Arab NNP I-NP
+Emirates NNPS I-NP
+1996-12-06 CD I-NP
+
+Results NNS B-NP
+of IN B-PP
+Asian NNP B-NP
+Cup NNP I-NP
+group NN I-NP
+C NNP I-NP
+matches NNS I-NP
+played VBN B-VP
+on IN B-PP
+Friday NNP B-NP
+: : O
+
+Japan NNP B-NP
+2 CD I-NP
+Syria NNP I-NP
+1 CD I-NP
+( ( I-NP
+halftime NN I-NP
+0-1 JJ B-ADVP
+) ) O
+
+Scorers NNS B-NP
+: : O
+
+Japan NNP B-NP
+- : O
+Hassan NNP B-NP
+Abbas NNP I-NP
+84 CD I-NP
+own JJ I-NP
+goal NN I-NP
+, , O
+Takuya NNP B-NP
+Takagi NNP I-NP
+88 CD I-NP
+. . O
+
+Syria NNP B-NP
+- : O
+Nader NNP B-NP
+Jokhadar NNP I-NP
+7 CD I-NP
+
+Attendance NN B-NP
+: : O
+10,000 LS B-LST
+. . O
+
+China NNP B-NP
+0 CD I-NP
+Uzbekistan NNP I-NP
+2 CD I-NP
+( ( I-NP
+halftime NN I-NP
+0-0 CD I-NP
+) ) O
+
+Scorers NNS B-NP
+: : O
+Shkvyrin NNP B-NP
+Igor NNP I-NP
+78 CD I-NP
+, , O
+Shatskikh NNP B-NP
+Oleg NNP I-NP
+90 CD I-NP
+
+Attendence NN B-N

@@ -1,0 +1,69 @@
+# edited by zjt
+import cv2
+import numpy as np
+from PIL import Image
+from dahuffman import HuffmanCodec
+from matplotlib import pyplot as plt
+import copy
+import sys
+sys.path.append("D:\计算机\WORKS\信息隐藏技术\datahide_lab")
+from jpeg24depth import *
+
+SHOW = True
+
+class jpeg_stegano:
+    process = None
+    zig_data = None
+    data = None
+    zig_data_ste = None
+    length = 0
+
+    def __init__(self, zig_data, data, process):
+        self.zig_data = zig_data
+        self.data = data
+        self.process = process
+        self.f3_stegano()
+
+    def compress_pic(self):
+        sequence = tuple([tuple(line) for line in self.zig_data_ste])
+        codec = HuffmanCodec.from_data(sequence)
+        encoded = codec.encode(sequence)
+        return codec, encoded
+
+    def compress_pic_before(self):
+        sequence = tuple([tuple(line) for line in self.zig_data])
+        codec = HuffmanCodec.from_data(sequence)
+        encoded = codec.encode(sequence)
+        return codec, encoded
+
+    def stegano_compress(self):
+        codec, encoded = self.compress_pic()
+        return codec, encoded
+
+    def decompress_reverse(self, codec, encoded, secret_shape):
+        decoded_blocks = self.decompress_pic(codec, encoded)
+        self.extrct_info(decoded_blocks, secret_shape)
+        self.reverse_process(decoded_blocks)
+
+    def f3_stegano(self):
+        self.zig_data_ste = []
+        flag = False
+        pos_data = 0
+        for item in self.zig_data:
+            pos_zig = 0
+            block = copy.deepcopy(item)
+            while pos_zig < 64 and pos_data < len(self.data) and not flag:
+                if self.data[pos_data] == 1:
+                    if block[pos_zig] == 0:
+                        pass
+                    elif block[pos_zig] % 2 == 1:
+                        pos_data += 1
+                    else:
+                        block[pos_zig] = (abs(block[pos_zig]) - 1) * (abs(block[pos_zig]) // block[pos_zig])
+                        pos_data += 1
+                else:
+                    if block[pos_zig] == 0:
+                        pass
+                    elif block[pos_zig] == 1 or block[pos_zig] == -1:
+                        block[pos_zig] = 0
+                    elif block[pos_zi

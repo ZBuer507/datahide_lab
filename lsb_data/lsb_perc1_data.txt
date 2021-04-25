@@ -1,0 +1,15 @@
+# edited by zjt
+import cv2
+import numpy as np
+from PIL import Image
+from dahuffman import HuffmanCodec
+from matplotlib import pyplot as plt
+import copy
+import sys
+sys.path.append("D:\计算机\WORKS\信息隐藏技术\datahide_lab")
+from jpeg24depth import *
+
+SHOW = True
+
+class jpeg_stegano:
+    process = None

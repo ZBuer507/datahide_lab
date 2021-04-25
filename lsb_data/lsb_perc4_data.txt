@@ -1,0 +1,45 @@
+# edited by zjt
+import cv2
+import numpy as np
+from PIL import Image
+from dahuffman import HuffmanCodec
+from matplotlib import pyplot as plt
+import copy
+import sys
+sys.path.append("D:\计算机\WORKS\信息隐藏技术\datahide_lab")
+from jpeg24depth import *
+
+SHOW = True
+
+class jpeg_stegano:
+    process = None
+    zig_data = None
+    data = None
+    zig_data_ste = None
+    length = 0
+
+    def __init__(self, zig_data, data, process):
+        self.zig_data = zig_data
+        self.data = data
+        self.process = process
+        self.f3_stegano()
+
+    def compress_pic(self):
+        sequence = tuple([tuple(line) for line in self.zig_data_ste])
+        codec = HuffmanCodec.from_data(sequence)
+        encoded = codec.encode(sequence)
+        return codec, encoded
+
+    def compress_pic_before(self):
+        sequence = tuple([tuple(line) for line in self.zig_data])
+        codec = HuffmanCodec.from_data(sequence)
+        encoded = codec.encode(sequence)
+        return codec, encoded
+
+    def stegano_compress(self):
+        codec, encoded = self.compress_pic()
+        return codec, encoded
+
+    def decompress_reverse(self, codec, encoded, secret_shape):
+        decoded_blocks = self.decompress_pic(codec, encoded)
+        self.extrct_info(decoded_blocks
