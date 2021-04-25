@@ -1,3 +1,4 @@
+#edited by mqa and zjt
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -31,6 +32,7 @@ class rs_analysis:
     r_m = None
     s_m = None
 
+    #edited by mqa
     def __init__(self, img):
         self.const()
         self.origin_image = np.array(img, dtype=int)
@@ -43,6 +45,7 @@ class rs_analysis:
         self.f()
         self.statistics()
     
+    #edited by mqa
     def const(self):
         self.block_size = 8
 
@@ -56,6 +59,7 @@ class rs_analysis:
                 for i in range(sum - rg, rg + 1):
                     self.zig.append((i, sum - i))
     
+    #edited by mqa
     def padding(self):
         self.origin_height = self.origin_image.shape[0]
         self.origin_width = self.origin_image.shape[1]
@@ -80,17 +84,20 @@ class rs_analysis:
         self.height = self.image.shape[0]
         self.width = self.image.shape[1]
     
+    #edited by mqa
     def block(self, num):
         lev = num // self.block_per_level
         top = ((num % self.block_per_level) // self.block_per_line) * self.block_size
         left = ((num % self.block_per_level) % self.block_per_line) * self.block_size
         return lev, top, left
 
+    #edited by mqa
     def zigzag(self):
         self.zigzag_data = {'pre':[[self.image[self.zig[j][0] + self.block(i)[1], self.zig[j][1] + self.block(i)[2], self.block(i)[0]] for j in range(self.block_size * self.block_size)] for i in range(self.block_count)]}
         self.zigzag_data['pos'] = [[block[i] + (-1) ** (block[i] % 2) for i in range(len(block))] for block in self.zigzag_data['pre']]
         self.zigzag_data['neg'] = [[block[i] - (-1) ** (block[i] % 2) for i in range(len(block))] for block in self.zigzag_data['pre']]
 
+    #edited by mqa
     def f(self):
         def cal(lst):
             tmp = 0
@@ -101,6 +108,7 @@ class rs_analysis:
         tp = ('pre', 'pos', 'neg')
         self.correlation_data = {key:[cal(block) for block in self.zigzag_data[key]] for key in tp}
 
+    #edited by mqa
     def statistics(self):
         self.rm = 0
         self.sm = 0
@@ -114,6 +122,7 @@ class rs_analysis:
             self.r_m += int(self.correlation_data['neg'][i] > self.correlation_data['pre'][i])
             self.s_m += int(self.correlation_data['neg'][i] < self.correlation_data['pre'][i])
 
+    #edited by mqa and zjt
     def rs_analysis(self, stegano):
         x = []
         rm_p = []

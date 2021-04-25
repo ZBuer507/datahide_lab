@@ -5,5 +5,6 @@ jpeg_stegano.py main_lab1.py edited by zjt
 
 #LSB stegano and RS analysis
 bmp_stegano.py main_lab2.py edited by zjt
+rs_analysis.py edited by mqa
 
 README edited by zjt
