@@ -1,6 +1,7 @@
 #edited by mqa and zjt
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 import sys
 sys.path.append("D:\计算机\WORKS\信息隐藏技术\datahide_lab")
 from bmp_stegano import *
@@ -94,8 +95,8 @@ class rs_analysis:
     #edited by mqa
     def zigzag(self):
         self.zigzag_data = {'pre':[[self.image[self.zig[j][0] + self.block(i)[1], self.zig[j][1] + self.block(i)[2], self.block(i)[0]] for j in range(self.block_size * self.block_size)] for i in range(self.block_count)]}
-        self.zigzag_data['pos'] = [[block[i] + (-1) ** (block[i] % 2) for i in range(len(block))] for block in self.zigzag_data['pre']]
-        self.zigzag_data['neg'] = [[block[i] - (-1) ** (block[i] % 2) for i in range(len(block))] for block in self.zigzag_data['pre']]
+        self.zigzag_data['pos'] = [[block[i] + ((-1) ** (block[i] % 2)) * random.randint(0, 1) for i in range(len(block))] for block in self.zigzag_data['pre']]
+        self.zigzag_data['neg'] = [[block[i] - ((-1) ** (block[i] % 2)) * random.randint(0, 1) for i in range(len(block))] for block in self.zigzag_data['pre']]
 
     #edited by mqa
     def f(self):
